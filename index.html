@@ -27,7 +27,7 @@
             color: var(--text-main); 
             margin: 0; 
             padding: 10px;
-            overscroll-behavior: none; /* Prevents "bounce" on mobile */
+            overscroll-behavior: none;
         }
 
         .container { max-width: 500px; margin: 0 auto; }
@@ -65,7 +65,6 @@
 
         input:focus { border-color: var(--accent); }
 
-        /* Stats Dashboard */
         .dashboard { 
             display: grid; 
             grid-template-columns: 1fr 1fr; 
@@ -84,7 +83,7 @@
         .stat-val { display: block; font-size: 22px; font-weight: 800; color: var(--success); }
         .stat-label { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
 
-        button { 
+        .btn-main { 
             width: 100%; 
             background: var(--accent); 
             border: none; 
@@ -94,9 +93,22 @@
             font-weight: bold; 
             font-size: 18px; 
             box-shadow: 0 4px 15px rgba(47, 129, 247, 0.3);
+            margin-bottom: 10px;
         }
 
-        button:active { transform: scale(0.97); }
+        .btn-clear {
+            width: 100%;
+            background: transparent;
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 10px;
+            color: var(--text-dim);
+            font-weight: 600;
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+
+        button:active { transform: scale(0.97); opacity: 0.8; }
 
         .plan-header { 
             color: var(--accent); 
@@ -129,7 +141,6 @@
         .val-sl { font-weight: bold; color: #fff; text-align: right; }
         .val-qty { color: var(--text-dim); text-align: center; }
 
-        /* Safety Classes */
         .deadly { background: rgba(248, 81, 73, 0.15); border-left: 3px solid var(--danger); padding-left: 5px; }
         .deadly .val-sl { color: var(--danger); }
         .tight { color: var(--warning); }
@@ -159,7 +170,8 @@
             <label>Entry Price (Actual Fill)</label>
             <input type="number" id="entry" placeholder="e.g. 300.50" inputmode="decimal">
             
-            <button onclick="generatePlan()">GENERATE PLAN</button>
+            <button class="btn-main" onclick="generatePlan()">GENERATE PLAN</button>
+            <button class="btn-clear" onclick="clearAll()">CLEAR ALL</button>
         </div>
 
         <div id="results"></div>
@@ -185,13 +197,23 @@
             }
         }
 
+        function clearAll() {
+            document.getElementById('risk').value = 47;
+            document.getElementById('atr').value = '';
+            document.getElementById('entry').value = '';
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('stats15').innerText = '0 | 0';
+            document.getElementById('stats20').innerText = '0 | 0';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
         function generatePlan() {
             const risk = parseFloat(document.getElementById('risk').value);
             const atr = parseFloat(document.getElementById('atr').value);
             const entry = parseFloat(document.getElementById('entry').value);
             const results = document.getElementById('results');
 
-            if (!entry) return;
+            if (!entry || !atr) return;
 
             results.innerHTML = "";
             const profiles = [[1.5, "1.5x ATR Momentum"], [2.0, "2.0x ATR Conservative"]];
@@ -208,7 +230,6 @@
                 let currentShares = initialQty;
                 let runningProfit = 0;
 
-                // Stage 0
                 html += `<div class="row"><span>START</span><span class="val-qty">${initialQty} sh</span><span class="val-sl">${nseRound(entry + dist)}</span></div>`;
 
                 for (let i = 1; i <= 7; i++) {
