@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Risk Scaler PWA</title>
+    <style>
+        :root { --bg: #0d1117; --card: #161b22; --text: #c9d1d9; --accent: #58a6ff; --danger: #f85149; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; }
+        .input-group { background: var(--card); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #30363d; }
+        label { display: block; font-size: 12px; color: #8b949e; margin-bottom: 5px; text-transform: uppercase; }
+        input { width: 100%; background: #010409; border: 1px solid #30363d; color: white; padding: 10px; border-radius: 4px; box-sizing: border-box; font-size: 16px; margin-bottom: 10px; }
+        button { width: 100%; background: var(--accent); border: none; padding: 12px; border-radius: 4px; color: white; font-weight: bold; font-size: 16px; cursor: pointer; }
+        .plan-section { margin-top: 20px; }
+        .header { color: var(--accent); border-bottom: 1px solid #30363d; padding-bottom: 5px; margin-bottom: 10px; font-size: 14px; }
+        .row { display: grid; grid-template-columns: 1.5fr 1fr 2fr; gap: 5px; font-family: monospace; padding: 8px 0; border-bottom: 1px solid #21262d; font-size: 14px; }
+        .tight { color: #e3b341; } /* Warning color for tight SL */
+        .deadly { color: var(--danger); font-weight: bold; } /* Danger color for very tight SL */
+    </style>
+</head>
+<body>
+
+    <div class="input-group">
+        <label>Total Risk (INR)</label>
+        <input type="number" id="risk" value="47">
+        
+        <label>Current ATR</label>
+        <input type="number" id="atr" step="0.1" placeholder="e.g. 1.6">
+        
+        <label>Entry Price</label>
+        <input type="number" id="entry" placeholder="e.g. 300">
+        
+        <button onclick="generatePlan()">Generate Flight Plan</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        function nseRound(num) {
+            // Rounds DOWN to the nearest 0.05 tick for Short SLs
+            return (Math.floor(num * 20) / 20).toFixed(2);
+        }
+
+        function generatePlan() {
+            const risk = parseFloat(document.getElementById('risk').value);
+            const atr = parseFloat(document.getElementById('atr').value);
+            const entry = parseFloat(document.getElementById('entry').value);
+            const results = document.getElementById('results');
+
+            if (!atr || !entry) return;
+
+            results.innerHTML = "";
+
+            // Profile logic: [Multiplier, Label]
+            const profiles = [[1.5, "1.5x ATR Profile"], [2.0, "2.0x ATR Profile"]];
+
+            profiles.forEach(([multiplier, title]) => {
+                const dist = atr * multiplier;
+                const initialQty = Math.floor(risk / dist);
+                const addOnQty = Math.floor(initialQty * 0.5);
+                
+                let html = `<div class="plan-section">
+                                <div class="header">${title} (Init Dist: ${dist.toFixed(2)} | Init Qty: ${initialQty})</div>`;
+                
+                let currentShares = initialQty;
+                let runningProfit = 0;
+
+                // Initial Level
+                const initialSL = entry + dist;
+                html += `<div class="row"><span>START</span><span>${initialQty} sh</span><span>SL: ${nseRound(initialSL)}</span></div>`;
+
+                // 7 Additions
+                for (let i = 1; i <= 7; i++) {
+                    const trigger = entry - i;
+                    runningProfit += (currentShares * 1); // Every ₹1 drop, old shares earn ₹1
+                    currentShares += addOnQty;
+                    
+                    const rawSL = trigger + ((risk + runningProfit) / currentShares);
+                    const finalSL = nseRound(rawSL);
+                    const slDist = finalSL - trigger;
+
+                    let alertClass = "";
+                    if (slDist < 0.5) alertClass = "deadly";
+                    else if (slDist < 0.8) alertClass = "tight";
+
+                    html += `<div class="row ${alertClass}">
+                                <span>₹${trigger}</span>
+                                <span>+${addOnQty} (${currentShares})</span>
+                                <span>SL: ${finalSL}</span>
+                             </div>`;
+                }
+
+                html += `</div>`;
+                results.innerHTML += html;
+            });
+        }
+    </script>
+</body>
+</html>
