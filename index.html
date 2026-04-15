@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Trading Command Center v5</title>
+    <title>Trading Command Center v6</title>
     <style>
         :root { 
             --bg: #010409; 
@@ -75,7 +75,6 @@
 
         label { display: block; font-size: 9px; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1.5px; }
 
-        /* CHANGED TO TEXT INPUTS TO ALLOW DECIMALS WHILE TYPING */
         input { width: 100%; background: #000; border: 1px solid var(--border); color: #fff; padding: 14px; border-radius: 8px; font-size: 18px; margin-bottom: 16px; outline: none; font-weight: bold; }
         input:focus { border-color: var(--accent); }
 
@@ -96,10 +95,12 @@
         .deadly { background: rgba(248, 81, 73, 0.1); border-left: 3px solid var(--danger); padding-left: 8px; }
         .deadly .val-sl { color: var(--danger); }
 
+        /* THE RESTORED EXTEND BUTTON */
         .extend-btn {
             width: 100%; border: 2px dashed var(--border); background: transparent;
-            color: var(--text-dim); padding: 15px; border-radius: 12px;
-            margin: 20px 0 40px 0; font-size: 11px; font-weight: bold;
+            color: var(--accent); padding: 15px; border-radius: 12px;
+            margin: 20px 0 40px 0; font-size: 12px; font-weight: 900;
+            text-transform: uppercase; letter-spacing: 1px;
         }
     </style>
 </head>
@@ -114,7 +115,7 @@
                 <button class="del-btn" onclick="deleteActiveTab()">Delete Active Tab</button>
             </div>
 
-            <label>Total Risk Amount (₹)</label>
+            <label>Risk (₹)</label>
             <input type="text" id="risk" inputmode="decimal" value="47">
             
             <label>Current ATR</label>
@@ -131,10 +132,10 @@
                 </div>
             </div>
 
-            <label>Entry Price (Actual Fill)</label>
+            <label>Entry Price</label>
             <input type="text" id="entry" inputmode="decimal" placeholder="0.00">
             
-            <button class="btn-clear" onclick="resetActiveTab()">Reset Data</button>
+            <button class="btn-clear" onclick="resetActiveTab()">Reset Inputs</button>
         </div>
 
         <div id="results"></div>
@@ -145,7 +146,7 @@
         let activeIdx = 0;
 
         function init() {
-            const saved = localStorage.getItem('scaler_v5_data');
+            const saved = localStorage.getItem('scaler_v6_data');
             if (saved) {
                 trades = JSON.parse(saved);
             } else {
@@ -159,7 +160,7 @@
         }
 
         function saveData() {
-            localStorage.setItem('scaler_v5_data', JSON.stringify(trades));
+            localStorage.setItem('scaler_v6_data', JSON.stringify(trades));
         }
 
         function nseRound(num) {
@@ -179,7 +180,7 @@
             trades.forEach((t, i) => {
                 const btn = document.createElement('div');
                 btn.className = `tab ${i === activeIdx ? 'active' : ''}`;
-                btn.innerText = t.atr ? `ATR: ${t.atr}` : `Trade ${i+1}`;
+                btn.innerText = t.atr ? `ATR: ${t.atr}` : `T${i+1}`;
                 btn.onclick = () => { activeIdx = i; refreshUI(); };
                 bar.appendChild(btn);
             });
@@ -197,19 +198,17 @@
 
         function syncInputs() {
             const t = trades[activeIdx];
-            // We only update the value if the user is NOT currently focused on that field
-            // This is the "Decimal Fix"
+            // Decimal fix: don't overwrite if the user is currently typing
             if (document.activeElement.id !== 'risk') document.getElementById('risk').value = t.risk;
             if (document.activeElement.id !== 'atr') document.getElementById('atr').value = t.atr;
             if (document.activeElement.id !== 'entry') document.getElementById('entry').value = t.entry;
             document.getElementById('wsDisplay').innerText = `Workspace ${activeIdx + 1}`;
         }
 
-        // Handle Input Events
+        // Handle Live Inputs
         ['risk', 'atr', 'entry'].forEach(id => {
             document.getElementById(id).oninput = (e) => {
                 trades[activeIdx][id] = e.target.value;
-                // Generate plan and stats without re-syncing the input values
                 generatePlan();
                 saveData();
             };
@@ -226,12 +225,14 @@
         }
 
         function resetActiveTab() {
-            trades[activeIdx] = createBlankWorkspace();
+            trades[activeIdx].atr = "";
+            trades[activeIdx].entry = "";
+            trades[activeIdx].extraCount = 0;
             refreshUI();
         }
 
         function extendLadder() {
-            trades[activeIdx].extraCount++;
+            trades[activeIdx].extraCount = (trades[activeIdx].extraCount || 0) + 1;
             refreshUI();
         }
 
@@ -270,18 +271,20 @@
                     <div class="table-head"><span>Trigger</span><span>Size (Total)</span><span style="text-align:right">Global SL</span></div>`;
                 
                 let currentShares = initialQty;
-                let runningProfit = 0;
+                let runningBank = 0;
 
+                // Start Row
                 html += `<div class="row"><span>START</span><span class="val-qty">${initialQty} sh</span><span class="val-sl">${nseRound(entry + dist)}</span></div>`;
 
-                const totalLevels = 7 + t.extraCount;
+                // Levels (7 + extraCount)
+                const totalLevels = 7 + (t.extraCount || 0);
 
                 for (let i = 1; i <= totalLevels; i++) {
                     const trigger = entry - i; 
-                    runningProfit += currentShares; 
+                    runningBank += currentShares; 
                     currentShares += addOnQty;
                     
-                    const finalSL = nseRound(trigger + ((risk + runningProfit) / currentShares));
+                    const finalSL = nseRound(trigger + ((risk + runningBank) / currentShares));
                     const slDist = Math.abs(parseFloat(finalSL) - trigger);
                     const rowClass = slDist < (atr * 0.65) ? "deadly" : "";
 
@@ -294,7 +297,8 @@
                 resDiv.innerHTML += html + `</div>`;
             });
 
-            resDiv.innerHTML += `<button class="extend-btn" onclick="extendLadder()">+ EXTEND LADDER (Level ${8 + t.extraCount}+)</button>`;
+            // ADD EXTEND BUTTON AT BOTTOM
+            resDiv.innerHTML += `<button class="extend-btn" onclick="extendLadder()">+ Add Entry Level (Level ${8 + (t.extraCount || 0)}+)</button>`;
         }
 
         init();
